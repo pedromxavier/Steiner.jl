@@ -1,6 +1,6 @@
 struct SteinerTree{N,K<:AbstractFloat}
     points::Vector{Vector{K}}
-    matrix::DistanceMatrix{K}
+    # matrix::DistanceMatrix{K}
     graph::SimpleGraph{Int}
     steiner_points::BitSet
     terminal_points::BitSet

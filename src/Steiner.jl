@@ -1,17 +1,18 @@
 module Steiner
 
-using Graphs:
-    AbstractGraph,
-    Graphs,
-    SimpleGraph,
-    add_vertices!,
-    edges,
-    vertices
-using JuMP
+# using Graphs:
+#     AbstractGraph,
+#     Graphs,
+#     SimpleGraph,
+#     add_vertices!,
+#     edges,
+#     vertices
+# using JuMP
 using LinearAlgebra
-using RecipesBase:
-    @recipe,
-    @series
+using Random
+# using RecipesBase:
+#     @recipe,
+#     @series
 
 # export SteinerTree
 
@@ -25,14 +26,14 @@ using RecipesBase:
 #     return l
 # end
 
-include("lib/tree.jl")
-include("lib/view.jl")
-include("lib/tools.jl")
+# include("lib/tree.jl")
+# include("lib/view.jl")
+# include("lib/tools.jl")
 include("lib/instances.jl")
 
 include("interface.jl")
 
 include("methods/exact/exact.jl")
-include("methods/heuristic/heuristic.jl")
+# include("methods/heuristic/heuristic.jl")
 
 end # module Steiner

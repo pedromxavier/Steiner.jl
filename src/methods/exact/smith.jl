@@ -15,11 +15,12 @@ SMT representation: Steiner point i is adjacent to points adj[i][0..2].
 
 const ε₀ = 0.0001
 const ε₁ = 0.005
-const ε₂ = 0
+const ε₂ = 0.001
 const ε₃ = 0
 
-struct Smith{T,U <: Integer}
+struct SmithData{T,U <: Integer}
 	# Dimensions
+	k::Int
 	N::Int # space dimension
 	p::Int # terminal points
 	s::Int # Steiner points
@@ -33,28 +34,33 @@ struct Smith{T,U <: Integer}
 	ψ::Vector{U} # best vector
 	ℵ::Matrix{U} # adjacency
 	E::Matrix{U} # edges
-	S::Vector{u} # stack
+	S::Vector{U} # stack
+
+	# Ancillary
+	u::Vector{U}
+	v::Matrix{T}
+	B::Matrix{T}
+	C::Matrix{T}
 
 	# Constants
 	α::T # Scale
 
-	# Ancillary
-	B::Matrix{T}
-	C::Matrix{T}
-
 	# Lengths
-	L::Vector{T}
+	L::Matrix{T}
 	ℓ::T # any upper bound on the length of the SMT
 
+	# Random
 	rng::Random.AbstractRNG
 
 	function SmithData{T,U}(points::Matrix{T}; rng::Random.AbstractRNG = Random.Xoshiro()) where {T,U <: Integer}
-		K = 3
+		# Dimensions
+		k = 3
 		N = size(points, 1) # space dimension
 		p = size(points, 2) # terminal points
 		s = p - 2           # Steiner points
 		n = p + s           # total points
 
+		# Coordinates
 		x = Matrix{T}(undef, N, 2n)
 
 		# Store coordinates for terminal points
@@ -66,26 +72,44 @@ struct Smith{T,U <: Integer}
 			α = max(α, abs(x[j, i] - x[j, 1]))
 		end
 
-		
+		# Ancillary
+		u = Vector{U}(undef, 3)
+		v = Matrix{T}(undef, N, 3)
 		B = Matrix{T}(undef, 3, n)
 		C = Matrix{T}(undef, N, n)
 
-
-		L = Matrix{T}(undef, 3, n)
-
+		# Topology
+		ψ = Vector{U}(undef, n)
 		θ = Vector{U}(undef, n)
 		ℵ = Matrix{U}(undef, 3, n - 2)
 		E = Matrix{U}(undef, 2, 2n)
 		S = Vector{U}(undef, n ^ 2)
+		
+		# Lengths
+		L = Matrix{T}(undef, 3, n)
+		ℓ = typemax(T)
 
 		return new{T,U}(
 			# Dimensions
-			K, N, p, s, n,
+			k, N, p, s, n,
 
 			# Coordinates
-			x, y,
+			x,
 
+			# Topology
+			θ, ψ, ℵ, E, S,
 
+			# Ancillary
+			u, v, B, C,
+
+			# Constants
+			α,
+
+			# Lengths
+			L, ℓ,
+
+			# Random
+			rng,
 		)
 	end
 end
@@ -127,7 +151,7 @@ function smith_solve!(s::SmithData{T,U}) where {T,U}
 
 		l = 2k + 1
 
-		while l > 0 && k <= p - 3
+		while l > 0 && k <= s.p - 3
 			s.θ[k] = l
 
 			# Build the tree represented by the topol. vector θ[1..k]
@@ -203,425 +227,8 @@ function smith_solve!(s::SmithData{T,U}) where {T,U}
 	return nothing
 end
 
-function smith_optimize!(s::SmithData{T,U}, τ::T) where {T,U}
 
-end
-
-function smith_build_tree!(s::SmithData{T,U}, k::Integer) where {T,U}
-	s.K = 3
-	m = s.p + 1
-end
-
-function smith_dist(s::SmithData{T,U}, i::Integer, j::Integer) where {T,U}
-	return norm(s.x[:, i] - s.y[:, j])
-end
-
-function smith_length!(s::SmithData{T,U}) where {T,U}
-	# Stores edge lengths of tree T in array s.L[1..k1][0..2] and returns total length.
-    
-	ℓ = zero(T)
-	
-	k = s.K - 2
-
-	for i = 1:k
-		l = i + p
-
-		n = s.ℵ[:, i]
-
-
-		if (n[1] < l) {
-			t = smith_dist(s, n[1], l)
-			ℓ += t; s.L[i][0] = t; n[1] -= p;
-			if (n[1] > 0) for (j = 0; j < 3; j++) if (adj[n[1]][j] == l) { s.L[n[1]][j] = t; break; }
-		}
-		if (n[2] < l) {
-			t = smith_dist(s, n[2], l)
-			ℓ += t; s.L[i][1] = t; n[2] -= p;
-			if (n[2] > 0) for (j = 0; j < 3; j++) if (adj[n[2]][j] == l) { s.L[n[2]][j] = t; break; }
-		}
-		if (n[3] < l) {
-			t = smith_dist(s, n2, l)
-			ℓ += t; s.L[i][2] = t; n2 -= p;
-			if (n2 > 0) for (j = 0; j < 3; j++) if (adj[n2][j] == l) { s.L[n2][j] = t; break; }
-		}
-	} 
-	
-	# Have now figured out distance s.L[i][00.3] from Steiner pt. i to neighbors. */
-	
-	return (ℓ);
-end
-
-function _length()
-	# Stores edge lengths of tree T in array s.L[1..k1][0..2] and returns total length. */
-	
-	leng = 0.0
-	k1 = N - 2
-	
-	for i = 2:k1+1
-		i2 = i + p
-
-		n0 = adj[1,i]
-		n1 = adj[2,i]
-		n2 = adj[3,i]
-
-		if n0 < i2
-			t = norm(x[:,n0], x[:,i2])
-			leng += t
-			s.L[1,i] = t
-			n0 -= p
-
-			if n0 > 0
-				for j = 1:3
-					if adj[j,n0] == i2
-						s.L[j,n0] = t
-						break
-					end
-				end
-			end
-		end
-
-		if n1 < i2
-			t = norm(x[:,n1], x[:,i2])
-			leng += t
-			s.L[2,i] = t
-			n1 -= p
-			
-			if n1 > 0
-				for j = 1:3
-					if adj[j,n1] == i2
-						s.L[j,n1] = t
-						break
-					end
-				end
-			end
-		end
-
-		if n2 < i2
-			t = norm(x[:,n2], x[:,i2])
-			leng += t
-			s.L[3,i] = t
-			n2 -= p
-			
-			if n2 > 0
-				for j = 1:3
-					if adj[j,n2] == i2
-						s.L[j,n2] = t
-						break
-					end
-				end
-			end
-		end
-	end 
-
-	# Have now figured out distance s.L[i][00.3] from Steiner pt. i to neighbors. */
-
-	return leng
-end
-
-function _error()
-	# Returns the error figure of tree T with Steiner coords in XX[][].
-	# Assumes edge lengths have been pre-stored in array s.L[][]. */
-	
-	k1 = N - 2
-	efig = 0.0
-
-	for i = 2:k1+1
-		i2 = i + p
-		n0 = adj[1,i]
-		n1 = adj[2,i]
-		n2 = adj[3,i]
-
-		d12 = d01 = d02 = 0.0
-
-		for m = 1:N
-			t = x[m,i2]
-			r = x[m,n0] - t
-			s = x[m,n1] - t
-			t = x[m,n2] - t
-
-			d12 += s * t
-			d01 += r * s
-			d02 += r * t;
-		end
-
-		# only angles < 120 cause error */
-
-		t = d12 + d12 + s.L[2,i] * s.L[3,i]
-
-		if (t > 0.0)
-			efig += t
-		end
-
-		t = d01 + d01 + s.L[1,i] * s.L[2,i]
-
-		if (t > 0.0)
-			efig += t
-		end
-
-		t = d02 + d02 + s.L[1,i] * s.L[3,i]
-
-		if (t > 0.0)
-			efig += t
-		end
-
-	end
-	
-	return sqrt(efig)
-end
-
-function solve(::SmithMethod, points::Matrix{K}) where {K}
-    N = size(points, 1) # space dimension
-    p = size(points, 2) # terminal points
-	s = p - 2
-	n = p + s
-
-	# Inputs p, N, sites; outputs succesive best Steiner
-    # trees found. Best tree's topology-vector is stored in BESTVEC.	
-	A = Vector{Int}(undef, n)
-	
-	rng = Random.Xoshiro()
-
-	# (1) Input
-
-	for i = 2:p+1, j = 1:N
-		x[j,i] = ...
-	end
-
-	# Constants
-	α = 0.0     # Scale
-	β = 0.99999
-	δ = 0.0001
-	
-
-	for i = 2:p+1, j = 1:N
-		q = x[j,i] - x[j,2]
-
-		if q < 0.0
-			q = -q
-		end
-
-		if q > α
-			α = q
-		end
-	end
-
-	if p == 3 # Deal with special case of 3 sites
-		_buildtree(0, A)
-
-		q = _length()
-		r = _error()
-
-		while true
-			optimize(δ * r / p)
-			q = _length()
-			r = _error()
-
-			if !(r > q * δ)
-				break
-			end
-		end
-
-		output_tree()
-
-		return
-	end
-	
-	# (2) Preprocessing and initialization
-	# Optionally, sort sites in some nice order here
-	# ℓ = any upper bound ont the length of the SMT
-	ℓ = HUGE
-	k    = 1
-	m    = 0
-	ct   = 0
-
-	# ct counts backtrack iters. Unused at present
-	while true
-		# 3: candidate leaf generation and backtracking */
-		nc = 0
-		ct += 1
-
-		# if (ct % 10000 == 0) { printf("still running (%ld)!\n",ct); fflush(stdout); }
-		
-		l = 2 * k + 1
-
-		while l > 0 && k <= p - 3
-			# Build the tree represented by the topol. vector A[1..k]
-			A[k] = l
-
-			_buildtree(k, A)
-
-			# .. and optimize it until either obviously bad or small error figure happens
-			@label ITER
-
-			q = _length()
-			r = _error()
-
-			if (q - r < ℓ)
-				if (r > ε₁ * q)
-					optimize(δ * r / p)
-					@goto ITER
-				end
-
-				if (k >= p-3)
-					while true
-						optimize(δ * r / p)
-						q = _length()
-						r = _error()
-
-						if !(r > q* δ)
-							break
-						end
-					end
-
-					if (q < ℓ)
-						for i = 2:k+1
-							BESTVEC[i] = A[i]
-						end
-
-						if (q < ℓ * β)
-							output_tree()
-						end
-
-						ℓ = q;
-					end
-				else
-					i = nc
-					nc += 1
-
-					while (i > 1 && LEN[i] < q)
-						STACK[m+i+1] = STACK[m+i]
-						LEN[i+1] = LEN[i]
-						i -= 1
-					end
-
-					i += 1
-
-					STACK[m+i] = l
-					
-					LEN[i] = q
-				end
-			end
-
-			l -= 1
-		end
-
-		m = m + nc;
-
-		while (nc <= 0)
-			k -= 1
-			if (k <= 0)
-				return 0 # exit(0)
-			end
-
-			nc = STACK[m]
-			m -= 1
-		end
-
-		A[k] = STACK[m]
-		STACK[m] = nc - 1
-		
-		if (k < p - 3)
-			k += 1
-		else
-			m -= 1
-		end
-	end
-
-	return 0
-end
-
-function _buildtree(k::Int, topvec::Vector{Int})
-	rng = Random.Xoshiro()
-
-	# Tiny factor
-	ϵ = 0.001
-
-	# Scale
-	α = 1.0
-
-    # builds tree represented by topvec[1..k]. Initial location of new Steiner pts
-    # is a slightly random perturbation of the centroid of its neighbors
-	
-    # First build the tree corresponding to the null vector
-    N = 3
-	m = p+1
-
-	for i = 1:3
-		adj[i,1]  = i
-		edge[1,i] = i
-		edge[2,i] = m
-	end
-
-	for i = 1:N
-		XX[i,m] = (XX[i,1] + XX[i,2] + XX[i,3]) / 3.0 + ϵ * α * rand(rng)
-	end
-
-	for i = 2:k+1
-		# Now: do vector element topvec[i]
-		en = i + 3
-		m  = i + 1
-		sn = m + p
-		e  = topvec[i]
-		ea = edge[1,e]
-		eb = edge[2,e]
-		adj[1,m] = ea
-		adj[2,m] = eb
-		adj[3,m] = en
-		m = ea - p
-
-		if m > 0
-			for j = 1:3
-				if adj[j,m] == eb
-					adj[j,m] = sn
-					break
-				end
-			end
-		end
-
-		m = eb - p
-
-		if m > 0
-			for j = 1:3
-				if adj[j,m] == ea
-					adj[j,m] = sn
-					break
-				end
-			end
-		end
-
-		edge[2,e] = sn
-		
-		e = 2en - 4
-
-		edge[1,e] = en
-		edge[2,e] = sn
-
-		e += 1
-
-		edge[1,e] = eb
-		edge[2,e] = sn
-
-		for j = 1:N
-			x[j,sn] = (x[j,ea] + x[j,eb] + x[j,en]) / 3.0 + ϵ * α * rand(rng)
-		end
-	end
-
-	N = k + 3
-	
-	# Tree is now built. Initial coords in general position.
-	
-	return
-end
-
-"""
-/* Global variables: */
-double ℓ, α, N;
-int p, N;
-static int BESTVEC[N], STACK[N*N], adj[N-2][3], edge[2*N][2];
-static double XX[N*2], LEN[N], s.L[N][3];
-"""
-
-function _prep!(B, C, val, a, b, c)
+function smith_prep!(B, C, val, a, b, c)
 	if (b > p)
 		val[i] += 1
 		B[a,i] = c
@@ -630,21 +237,18 @@ function _prep!(B, C, val, a, b, c)
 	end
 end
 
-function _optimize(τ::Float64)
+function smith_optimize!(s, τ::Float64)
 	# τ: a small positive number */
 	# finds better coordinates XX[p+1..p+k1][] for the k1 Steiner points
 	# of tree T by: doing a relaxation iteration. Assumes that edge lengths of old tree
 	# have been per-stored in array s.L[][] */
-
-	B = Matrix{Float64}(undef, 3, n)
-	C = Matrix{Float64}(undef, N, n)
 
 	eqnstack = Vector{Int}(undef, n)
 	leafQ    = Vector{Int}(undef, n)
 	val      = Vector{Int}(undef, n)
 
 	lqp = eqp = 0
-	k1 = p - 2
+	k1 = s.p - 2
 
 	# First: compute B array, C array, and valences. Set up leafQ.
 	for i = k1+1:-1:1
@@ -671,9 +275,9 @@ function _optimize(τ::Float64)
 		B[:,i] .= 0.0
 		C[:,i] .= 0.0
 
-		_prep!(B, C, val, 0, n0, q0)
-		_prep!(B, C, val, 1, n1, q1)
-		_prep!(B, C, val, 2, n2, q2)
+		smith_prep!(B, C, val, 0, n0, q0)
+		smith_prep!(B, C, val, 1, n1, q1)
+		smith_prep!(B, C, val, 2, n2, q2)
 
 		#printf("SP: %20.20g %20.20g\n", XX[i + p][0], XX[i + p][1]); */
 		#printf("C: %20.20g %20.20g\n", C[i][0], C[i][1]); */
@@ -688,7 +292,7 @@ function _optimize(τ::Float64)
 
 	# Have set up equations - now to solve them.
 	# Second: eliminate leaves
-	while(lqp > 1)
+	while lqp > 1
 		lqp -= 1
 		i = leafQ[lqp]
 		val[i] -= 1
@@ -760,4 +364,149 @@ function _optimize(τ::Float64)
 	# /* printf("SP(2): %20.20g %20.20g\n", XX[i + p][0], XX[i + p][1]); */
 
 	return
+end
+
+function smith_build_tree!(s::SmithData{T,U}, k::Integer) where {T,U}
+    # builds tree represented by topvec[1..k]. Initial location of new Steiner pts
+    # is a slightly random perturbation of the centroid of its neighbors
+	
+    # First build the tree corresponding to the null vector
+	m = s.p + 1
+
+	s.ℵ[1:3,1] .= 1:3
+	s.E[1,1:3] .= 1:3
+	s.E[2,1:3] .= m
+
+	for i = 1:s.N
+		s.x[i,m] = sum(s.x[i,1:3]) / 3.0 + ε₂ * s.α * rand(s.rng)
+	end
+
+	for i = 2:k+1
+		# Now: do vector element topvec[i]
+		en = i + 3
+		m  = i + 1
+		sn = m + s.p
+		e  = s.θ[i]
+		ea = s.E[1,e]
+		eb = s.E[2,e]
+		s.ℵ[1,m] = ea
+		s.ℵ[2,m] = eb
+		s.ℵ[3,m] = en
+		m = ea - s.p
+
+		if m > 0
+			for j = 1:3
+				if s.ℵ[j,m] == eb
+					s.ℵ[j,m] = sn
+					break
+				end
+			end
+		end
+
+		m = eb - s.p
+
+		if m > 0
+			for j = 1:3
+				if s.ℵ[j,m] == ea
+					s.ℵ[j,m] = sn
+					break
+				end
+			end
+		end
+
+		s.E[2,e] = sn
+		
+		e = 2en - 4
+
+		s.E[1,e] = en
+		s.E[2,e] = sn
+
+		e += 1
+
+		s.E[1,e] = eb
+		s.E[2,e] = sn
+
+		for j = 1:s.N
+			s.x[j,sn] = (s.x[j,ea] + s.x[j,eb] + x[j,en]) / 3.0 + ε₂ * α * rand(rng)
+		end
+	end
+
+	s.k = k + 3
+	
+	# Tree is now built. Initial coords in general position.
+	
+	return
+end
+
+function smith_dist(s::SmithData{T,U}, i::Integer, j::Integer) where {T,U}
+	return norm(s.x[:, i] - s.x[:, j])
+end
+
+function smith_length_delta!(s::SmithData{T,U}, m::Integer, i::Integer, k::Integer) where {T,U}
+	if u[m] < k
+		Δℓ = smith_dist(s, s.u[m], k)
+		
+		s.L[m,i] = Δℓ
+		s.u[m] -= s.p
+
+		if s.u[m] > 0
+			for j = 1:3
+				if s.ℵ[j,s.u[m]] == k
+					s.L[j,s.u[m]] = Δℓ
+					break
+				end
+			end
+		end
+
+		return Δℓ
+	else
+		return zero(T)
+	end
+end
+
+function smith_length!(s::SmithData{T,U}) where {T,U}
+	# Stores edge lengths of tree T in array s.L[1..k1][0..2] and returns total length.
+	m = s.k - 2
+	ℓ = zero(T)
+
+	for i = 1:m
+		s.u[:] .= s.ℵ[:, i]
+
+		ℓ += smith_length_delta!(s, m, i, i + p)
+	end
+	
+	# Have now figured out distance s.L[i][00.3] from Steiner pt. i to neighbors. */
+	
+	return ℓ
+end
+
+function smith_error(s::SmithData{T,U}) where {T,U}
+	# Returns the error figure of tree T with Steiner coords in XX[][].
+	# Assumes edge lengths have been pre-stored in array s.L[][]. */
+	m = s.k - 2
+	ε = zero(T)
+
+	for i = 1:m
+		k = i + s.p
+
+		s.u[:]   .= s.ℵ[:,i]
+		s.v[:,:] .= s.x[m,s.u] .- s.x[m,k]
+
+		for (l₁, l₂) in [(1,2), (1,3), (2, 3)]
+			let Δε = 2 * (v[:,l₁]' * v[:,l₂])
+				# only angles < 120 cause error */
+				ε += max(zero(T), Δε)
+			end
+		end
+	end
+	
+	return √ε
+end
+
+function solve(::SmithMethod, points::Matrix{K}) where {K}
+	s = SmithData{K,Int}(points; rng = Random.Xoshiro())
+
+	smith_solve!(s)
+
+	return s # Return the steiner tree here! 
 end
