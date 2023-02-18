@@ -13,17 +13,17 @@ using RecipesBase:
     @recipe,
     @series
 
-export SteinerTree
+# export SteinerTree
 
-function steiner_tree_length(st::SteinerTree{N,K}) where {N,K}
-    l = zero(K)
+# function steiner_tree_length(st::SteinerTree{N,K}) where {N,K}
+#     l = zero(K)
 
-    for e in edges(st.steiner_tree)
-        l += path_length(st, e.src, e.dst)
-    end
+#     for e in edges(st.steiner_tree)
+#         l += path_length(st, e.src, e.dst)
+#     end
 
-    return l
-end
+#     return l
+# end
 
 include("lib/tree.jl")
 include("lib/view.jl")

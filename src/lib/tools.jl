@@ -17,26 +17,27 @@ function angle(x::Vector{K}, y::Vector{K}) where {K}
     v = y ./ norm(y)
     θ = 2 * atan(norm2(u + v), norm2(u - v))
     
-    return ifelse(
-        signbit(θ) || signbit(K(π) - θ),
-        ifelse(
-            signbit(θ),
-            zero(K),
+    if signbit(θ) || signbit(K(π) - θ),
+        if signbit(θ)
+            zero(K)
+        else
             K(π)
-        ),
+        end
+    else 
         θ
-    )
+    end
 end
 
 @doc raw"""
+
+Let ``u, v, w \in \mathbb{R}^{n}``. ``\triangle (u, v, w)``.
+
+``(u, v)``
 """ function solve_fermat(u::Vector{K}, v::Vector{K}, w::Vector{K}) where {K}
-    θ = K(2π/3)
+    θ = K(deg2rad(120))
     α = angle(v - u, w - u); α >= θ && return u
     β = angle(u - v, w - v); β >= θ && return v
     γ = angle(u - w, v - w); γ >= θ && return w
 
-    x = u - v
-    y = w - v
-    z = normalize!(cross(x, y))
-    LinearAlgebra.Rotation()
+    
 end
