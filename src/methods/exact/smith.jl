@@ -18,9 +18,9 @@ const ε₁ = 0.005
 const ε₂ = 0.001
 const ε₃ = 0
 
-struct SmithData{T,U <: Integer}
+mutable struct SmithData{T,U <: Integer}
 	# Dimensions
-	k::Int
+	k::Int # ?
 	N::Int # space dimension
 	p::Int # terminal points
 	s::Int # Steiner points
@@ -33,6 +33,7 @@ struct SmithData{T,U <: Integer}
 	θ::Vector{U} # topology
 	ψ::Vector{U} # best vector
 	ℵ::Matrix{U} # adjacency
+	δ::Vector{U} # valence
 	E::Matrix{U} # edges
 	S::Vector{U} # stack
 
@@ -42,12 +43,14 @@ struct SmithData{T,U <: Integer}
 	B::Matrix{T}
 	C::Matrix{T}
 
-	# Constants
-	α::T # Scale
-
 	# Lengths
 	L::Matrix{T}
+	Δ::Vector{T}
 	ℓ::T # any upper bound on the length of the SMT
+
+	# Constants
+	α::T # Scale
+	β::T # ?
 
 	# Random
 	rng::Random.AbstractRNG
@@ -65,12 +68,6 @@ struct SmithData{T,U <: Integer}
 
 		# Store coordinates for terminal points
 		x[1:N, 1:p] .= points[1:N, 1:p]
-		
-		α = zero(T) # Scale
-
-		for i = 1:p, j = 1:N
-			α = max(α, abs(x[j, i] - x[j, 1]))
-		end
 
 		# Ancillary
 		u = Vector{U}(undef, 3)
@@ -79,15 +76,25 @@ struct SmithData{T,U <: Integer}
 		C = Matrix{T}(undef, N, n)
 
 		# Topology
-		ψ = Vector{U}(undef, n)
-		θ = Vector{U}(undef, n)
-		ℵ = Matrix{U}(undef, 3, n - 2)
-		E = Matrix{U}(undef, 2, 2n)
-		S = Vector{U}(undef, n ^ 2)
+		ψ = Vector{U}(undef, n)        # best topology vector
+		θ = Vector{U}(undef, n)        # topology vector
+		ℵ = Matrix{U}(undef, 3, n - 2) # adjacency list
+		δ = Vector{U}(undef, s)        # Valence
+		E = Matrix{U}(undef, 2, 2n)    # edges
+		S = Vector{U}(undef, n ^ 2)    # stack
 		
 		# Lengths
-		L = Matrix{T}(undef, 3, n)
-		ℓ = typemax(T)
+		L = Matrix{T}(undef, 3, n)     # edge length
+		Δ = Vector{T}(undef, 3)        # ?
+		ℓ = typemax(T)                 # length upper bound
+
+		# Constants
+		α = zero(T) # Scale
+		β = zero(T) # ?
+
+		for i = 1:p, j = 1:N
+			α = max(α, abs(x[j, i] - x[j, 1]))
+		end
 
 		return new{T,U}(
 			# Dimensions
@@ -97,16 +104,17 @@ struct SmithData{T,U <: Integer}
 			x,
 
 			# Topology
-			θ, ψ, ℵ, E, S,
+			θ, ψ, ℵ, δ, E, S,
 
 			# Ancillary
 			u, v, B, C,
 
-			# Constants
-			α,
 
 			# Lengths
-			L, ℓ,
+			L, Δ, ℓ,
+
+			# Constants
+			α, β,
 
 			# Random
 			rng,
@@ -119,14 +127,16 @@ SmithData(args...; kw...) = SmithData{Float64,Int}(args...; kw...)
 function smith_solve_3!(s::SmithData{T,U}) where {T,U}
 	smith_build_tree!(s, 0)
 
-	ℓ = smith_length!(s)
-	ε = smith_error(s)
+	@show ℓ = smith_length!(s)
+	@show ε = smith_error(s)
 
 	while true
-		smith_optimize!(s, ε₀ * ε / s.p)
+		@show τ = ε₀ * ε / s.p
 
-		ℓ = smith_length!(s)
-		ε = smith_error(s)
+		smith_optimize!(s, τ)
+
+		@show ℓ = smith_length!(s)
+		@show ε = smith_error(s)
 
 		ε > ℓ * ε₀ || break
 	end
@@ -137,231 +147,206 @@ end
 function smith_solve!(s::SmithData{T,U}) where {T,U}
 	# special case
 	s.p == 3 && return smith_solve_3!(s)
+
+	error("p ≤ 3, please")
 	
 	# HINT: optionally, sort sites in some nice order here
 
-	# constants
-	δ = 
-
-	k = 1
-	m = 0
+	# # constants
+	# k = 1
+	# m = 0
 	
-	while true
-		nc = 0
+	# while true
+	# 	nc = 0
 
-		l = 2k + 1
+	# 	l = 2k + 1
 
-		while l > 0 && k <= s.p - 3
-			s.θ[k] = l
+	# 	while l > 1 && k <= s.p - 3
+	# 		s.θ[k] = l
 
-			# Build the tree represented by the topol. vector θ[1..k]
-			smith_build_tree!(s, k)
+	# 		# Build the tree represented by the topol. vector θ[1..k]
+	# 		smith_build_tree!(s, k)
 
-			@label(iter)
+	# 		@label(iter)
 
-			# .. and optimize it until either obviously bad or small error figure happens
-			ℓ = smith_length!(s)
-			ε = smith_error(s)
+	# 		# .. and optimize it until either obviously bad or small error figure happens
+	# 		ℓ = smith_length!(s)
+	# 		ε = smith_error(s)
 
-			if (ℓ - s.ℓ) < ε
-				if ε₁ * ℓ < ε
-					smith_optimize!(s, ε₀ * ε / p)
+	# 		if (ℓ - s.ℓ) < ε
+	# 			if ε₁ * ℓ < ε
+	# 				smith_optimize!(s, ε₀ * ε / s.p)
 
-					@goto(iter)
-				end
+	# 				@goto(iter)
+	# 			end
 
-				if k >= p - 3
-					while true
-						smith_optimize!(s, ε₀ * ε / p)
+	# 			if k >= s.p - 3
+	# 				while true
+	# 					smith_optimize!(s, ε₀ * ε / s.p)
 
-						ℓ = smith_length!(s)
-						ε = smith_error(s)
+	# 					ℓ = smith_length!(s)
+	# 					ε = smith_error(s)
 
-						ε > ℓ * ε₀ || break
-					end
+	# 					ε > ℓ * ε₀ || break
+	# 				end
 
-					if ℓ < s.ℓ
-						# update best solution
-						s.ℓ = ℓ 
-						s.ψ .= s.θ
-					else
-						i = nc
-						n += 1
+	# 				if ℓ < s.ℓ
+	# 					# update best solution
+	# 					s.ℓ = ℓ 
+	# 					s.ψ .= s.θ
+	# 				else
+	# 					i = nc
+	# 					s.k += 1
 
-						while i > 1 && s.L[i] < ℓ
-							s.S[m + i + 1] = s.S[m + i]
-							s.L[i + 1]     = s.L[i]
+	# 					while i > 1 && s.L[i] < ℓ
+	# 						s.S[m + i + 1] = s.S[m + i]
+	# 						s.L[i + 1]     = s.L[i]
 
-							i -= 1
-						end
+	# 						i -= 1
+	# 					end
 
-						i += 1
-						s.S[m + i] = l
-						s.L[i] = ℓ
-					end
-				end
-			end
-			l -= 1
-		end
+	# 					i += 1
+	# 					s.S[m + i] = l
+	# 					s.L[i] = ℓ
+	# 				end
+	# 			end
+	# 		end
+	# 		l -= 1
+	# 	end
 
-		m += nc
+	# 	m += nc
 
-		while nc <= 0
-			k -= 1
-			k <= 0 && return nothing
+	# 	while nc <= 0
+	# 		k -= 1
+	# 		k <= 0 && return nothing
 
-			nc = s.S[m]
-			m -= 1
-		end
+	# 		nc = s.S[m]
+	# 		m -= 1
+	# 	end
 
-		s.A[k] = s.S[m]
-		s.S[m] = nc - 1
+	# 	s.A[k] = s.S[m]
+	# 	s.S[m] = nc - 1
 
-		if k < p - 3
-			k += 1
-		else
-			m -= 1
-		end
-	end
+	# 	if k < p - 3
+	# 		k += 1
+	# 	else
+	# 		m -= 1
+	# 	end
+	# end
 
 	return nothing
 end
 
+function smith_prep!(s::SmithData, i::Integer, k::Integer)
+	l = s.u[k]
+	δ = s.Δ[k]
 
-function smith_prep!(B, C, val, a, b, c)
-	if (b > p)
-		val[i] += 1
-		B[a,i] = c
+	if (l > s.p)
+		# if l points to a Steiner point
+		s.δ[i]  += 1 # increase the valence for `i`
+		s.B[k,i] = δ #
 	else
-		C[:,i] .+= x[:,b] .* c
+		# l points to a terminal point
+		s.C[:,i] .+= s.x[:,l] .* δ
 	end
 end
 
-function smith_optimize!(s, τ::Float64)
+function smith_optimize!(s::SmithData{T,U}, τ::Float64) where {T,U}
 	# τ: a small positive number */
 	# finds better coordinates XX[p+1..p+k1][] for the k1 Steiner points
 	# of tree T by: doing a relaxation iteration. Assumes that edge lengths of old tree
 	# have been per-stored in array s.L[][] */
 
-	eqnstack = Vector{Int}(undef, n)
-	leafQ    = Vector{Int}(undef, n)
-	val      = Vector{Int}(undef, n)
+	K = trunc(U, s.β - 2)
 
-	lqp = eqp = 0
-	k1 = s.p - 2
+	stack = sizehint!(U[], s.n)
+	queue = sizehint!(U[], s.n)
+
+	return nothing
 
 	# First: compute B array, C array, and valences. Set up leafQ.
-	for i = k1+1:-1:1
-		n0 = adj[1,i]
-		n1 = adj[2,i]
-		n2 = adj[3,i]
-
-		q0 = 1.0 / (s.L[1,i] + τ)
-		q1 = 1.0 / (s.L[2,i] + τ)
-		q2 = 1.0 / (s.L[3,i] + τ)
-
-		# printf("q: %20.20g %20.20g %20.20g\n", q0, q1,  q2);
+	for i = K:-1:1
+		s.u[:] = s.ℵ[:,i] # adjacency list for `i`
+		s.Δ[:] = 1 ./ (s.L[:,i] .+ τ)
 
 		# Have now figured out reciprocal distances q0, q1, q2 from
 		# Steiner pt. i to neighbors n0, n1, n2 */
-		t = q0 + q1 + q2
+		s.Δ[:] ./= sum(s.Δ)
 
-		q0 /= t
-		q1 /= t
-		q2 /= t
+		s.δ[i] = zero(U)
 
-		val[i] = 0
+		s.B[:,i] .= zero(T)
+		s.C[:,i] .= zero(T)
 
-		B[:,i] .= 0.0
-		C[:,i] .= 0.0
-
-		smith_prep!(B, C, val, 0, n0, q0)
-		smith_prep!(B, C, val, 1, n1, q1)
-		smith_prep!(B, C, val, 2, n2, q2)
-
-		#printf("SP: %20.20g %20.20g\n", XX[i + p][0], XX[i + p][1]); */
-		#printf("C: %20.20g %20.20g\n", C[i][0], C[i][1]); */
+		smith_prep!(s, i, 1)
+		smith_prep!(s, i, 2)
+		smith_prep!(s, i, 3)
 
 		# Now: Steiner point i has Steiner valence val[i];
-		# coords obey eqns XX[i+p][] = sum(j)of B[j,i]*XX[nj][] + C[i][] */
-		if (val[i] <= 1)
-			leafQ[lqp] = i
-			lqp += 1 # puts leafs on leafQ
+		# coords obey eqns
+		# XX[i+p][] = sum(j) of B[j,i] * XX[nj][] + C[i][] */
+		if (s.δ[i] <= 1)
+			push!(queue, i)
 		end
 	end
 
 	# Have set up equations - now to solve them.
 	# Second: eliminate leaves
-	while lqp > 1
-		lqp -= 1
-		i = leafQ[lqp]
-		val[i] -= 1
-		i2 = i + p
+	while !isempty(queue)
+		# pick leaf vertex
+		iₜ = popfirst!(queue)
 
-		# now to eliminate leaf i
+		s.δ[iₜ] -= 1 # reduce valence for `iₜ`
 
-		eqnstack[eqp] = i
-		eqp+=1
-		# push i onto stack
-		for j = 1:3
-			if !iszero(B[j,i])
-				break # neighbor is #j
-			end
-		end
+		# get related Steiner point
+		iₛ = iₜ + s.p
 
-		q0 = B[j,i]
-		j = adj[j,i] - p # neighbor is j
-		val[j] -= 1
+		# now to eliminate leaf `iₜ`
+		push!(stack, iₜ) # push `iₜ` onto stack
+		
+		j = something(findfirst(!iszero, s.B[:, iₜ]), 3)
 
-		if (val[j] == 1)
-			leafQ[lqp] = j
-			lqp += 1
+		s.Δ[1] = s.B[j,iₜ]
+		
+		j = 1 + (s.ℵ[j,iₜ] - s.p) # neighbor is j
+
+		s.δ[j] -= 1 # reduce valence for `j`
+
+		if s.δ[j] == 1
+			push!(queue, j)
 		end # new leaf?
-		
-		for m = 1:3
-			if (adj[m,j] == i2)
-				break
-			end
-		end
 
-		q1 = B[m,j]
-		B[m,j] = 0.0
+		m = something(findfirst(==(iₛ), s.ℵ[:,j]), 3)
 
-		t = 1.0 - q1 * q0
-		t = 1.0 / t;
+		s.Δ[2] = s.B[m,j]
+
+		s.B[m,j] = 0.0
+
+		γ = 1.0 / (1.0 - s.Δ[2] * s.Δ[1])		
 		
-		
-		B[:,j] .*= t
-		C[:,j] .= t .* (C[:,j] .+ q1 .* C[:,i])
+		s.B[:,j] .= γ .* (s.B[:,j])
+		s.C[:,j] .= γ .* (s.C[:,j] .+ s.Δ[2] .* s.C[:,iₜ])
 	end
 
 	# III: Solve 1-vertex tree!
-	i = leafQ[1]
-	i2 = i + p
+	iₜ = queue[begin]
+	iₛ = iₜ + s.p
 
-	x[:,i2] .= C[:,i]
-
-	# /* printf("SP(1): %20.20g %20.20g\n", XX[i + p][0], XX[i + p][1]); */
+	s.x[:,iₛ] .= s.C[:,iₜ]
 
 	# IV: backsolve
-	while eqp > 0
-		eqp -= 1
-		i = eqnstack[eqp]
-		i2 = i + p
+	while !isempty(stack)
+		iₜ = pop!(stack)
+		iₛ = iₜ + s.p
 
-		for j = 1:3
-			if !iszero(B[j,i])
-				break # neighbor is #j
-			end
-		end
+		j = something(findfirst(!iszero, s.B[:, iₜ]), 3)
 
-		q0 = B[j,i]
-		j = adj[j,i] # neighbor is j */
+		s.Δ[1] = s.B[j,iₜ]
 
-		x[:,i2] .= C[:,i] + q0 * x[:,j]
+		j = s.ℵ[j,iₜ] # neighbor is j */
+
+		s.x[:,iₛ] .= s.C[:,iₜ] + s.Δ[1] * s.x[:,j]
 	end
-
-	# /* printf("SP(2): %20.20g %20.20g\n", XX[i + p][0], XX[i + p][1]); */
 
 	return
 end
@@ -371,7 +356,11 @@ function smith_build_tree!(s::SmithData{T,U}, k::Integer) where {T,U}
     # is a slightly random perturbation of the centroid of its neighbors
 	
     # First build the tree corresponding to the null vector
-	m = s.p + 1
+	
+	# ! Connect the first 3 terminal points to a Steiner point
+	# ! chosen to be a perturbation away from the center
+	s.β = 3
+	m   = s.p + 1 #
 
 	s.ℵ[1:3,1] .= 1:3
 	s.E[1,1:3] .= 1:3
@@ -381,7 +370,7 @@ function smith_build_tree!(s::SmithData{T,U}, k::Integer) where {T,U}
 		s.x[i,m] = sum(s.x[i,1:3]) / 3.0 + ε₂ * s.α * rand(s.rng)
 	end
 
-	for i = 2:k+1
+	for i = 1:k
 		# Now: do vector element topvec[i]
 		en = i + 3
 		m  = i + 1
@@ -427,11 +416,11 @@ function smith_build_tree!(s::SmithData{T,U}, k::Integer) where {T,U}
 		s.E[2,e] = sn
 
 		for j = 1:s.N
-			s.x[j,sn] = (s.x[j,ea] + s.x[j,eb] + x[j,en]) / 3.0 + ε₂ * α * rand(rng)
+			s.x[j,sn] = (s.x[j,ea] + s.x[j,eb] + s.x[j,en]) / 3.0 + ε₂ * s.α * rand(s.rng)
 		end
 	end
 
-	s.k = k + 3
+	s.β = k + 3
 	
 	# Tree is now built. Initial coords in general position.
 	
@@ -443,20 +432,25 @@ function smith_dist(s::SmithData{T,U}, i::Integer, j::Integer) where {T,U}
 end
 
 function smith_length_delta!(s::SmithData{T,U}, m::Integer, i::Integer, k::Integer) where {T,U}
-	if u[m] < k
-		Δℓ = smith_dist(s, s.u[m], k)
+	l = s.u[m]
+
+	if l < k
+		Δℓ = smith_dist(s, l, k)
 		
 		s.L[m,i] = Δℓ
-		s.u[m] -= s.p
 
-		if s.u[m] > 0
+		l -= s.p
+
+		if l > 0
 			for j = 1:3
-				if s.ℵ[j,s.u[m]] == k
-					s.L[j,s.u[m]] = Δℓ
+				if s.ℵ[j,l] == k
+					s.L[j,l] = Δℓ
 					break
 				end
 			end
 		end
+
+		s.u[m] = l
 
 		return Δℓ
 	else
@@ -466,13 +460,13 @@ end
 
 function smith_length!(s::SmithData{T,U}) where {T,U}
 	# Stores edge lengths of tree T in array s.L[1..k1][0..2] and returns total length.
-	m = s.k - 2
+	m = trunc(U, s.β - 2)
 	ℓ = zero(T)
 
 	for i = 1:m
 		s.u[:] .= s.ℵ[:, i]
 
-		ℓ += smith_length_delta!(s, m, i, i + p)
+		ℓ += smith_length_delta!(s, m, i, i + s.p)
 	end
 	
 	# Have now figured out distance s.L[i][00.3] from Steiner pt. i to neighbors. */
@@ -490,10 +484,10 @@ function smith_error(s::SmithData{T,U}) where {T,U}
 		k = i + s.p
 
 		s.u[:]   .= s.ℵ[:,i]
-		s.v[:,:] .= s.x[m,s.u] .- s.x[m,k]
+		s.v[:,:] .= s.x[:,s.u] .- s.x[:,k]
 
 		for (l₁, l₂) in [(1,2), (1,3), (2, 3)]
-			let Δε = 2 * (v[:,l₁]' * v[:,l₂])
+			let Δε = 2 * (s.v[:,l₁]' * s.v[:,l₂]) + s.L[i,l₁] * s.L[i,l₂]
 				# only angles < 120 cause error */
 				ε += max(zero(T), Δε)
 			end
